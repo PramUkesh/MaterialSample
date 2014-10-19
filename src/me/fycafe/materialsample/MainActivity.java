@@ -1,13 +1,14 @@
 package me.fycafe.materialsample;
 
 import android.app.Activity;
-
-import android.app.ActionBar;
 import android.app.Fragment;
 import android.app.FragmentManager;
-import android.content.Context;
-import android.os.Build;
+import android.content.res.Configuration;
 import android.os.Bundle;
+import android.support.v4.view.GravityCompat;
+import android.support.v7.app.ActionBar;
+import android.support.v7.app.ActionBarActivity;
+import android.support.v7.app.ActionBarDrawerToggle;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -15,46 +16,86 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.support.v4.widget.DrawerLayout;
-import android.widget.ArrayAdapter;
-import android.widget.TextView;
 
-public class MainActivity extends Activity implements
+public class MainActivity extends ActionBarActivity implements
 		NavigationDrawerFragment.NavigationDrawerCallbacks {
 
-	/**
-	 * Fragment managing the behaviors, interactions and presentation of the
-	 * navigation drawer.
-	 */
+	private ActionBarDrawerToggle mDrawerToggle;
+	private DrawerLayout mDrawerLayout;
 	private NavigationDrawerFragment mNavigationDrawerFragment;
 
-	/**
-	 * Used to store the last screen title. For use in
-	 * {@link #restoreActionBar()}.
-	 */
 	private CharSequence mTitle;
+
+	private ActionBarHelper mActionBar;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 
-		mNavigationDrawerFragment = (NavigationDrawerFragment) getFragmentManager()
-				.findFragmentById(R.id.navigation_drawer);
-		mTitle = getTitle();
+		mNavigationDrawerFragment = new NavigationDrawerFragment();
+		mActionBar = new ActionBarHelper();
+		mActionBar.init();
 
-		// Set up the drawer.
-		mNavigationDrawerFragment.setUp(R.id.navigation_drawer,
-				(DrawerLayout) findViewById(R.id.drawer_layout));
+		getFragmentManager()
+				.beginTransaction()
+				.replace(R.id.navigation_drawer, mNavigationDrawerFragment)
+				.commit();
+
+		setUpDrawer();
+	}
+
+	private void setUpDrawer() {
+		mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
+
+		mDrawerLayout.setDrawerListener(new MyDrawerListener());
+		mDrawerLayout.setDrawerShadow(R.drawable.drawer_shadow,
+				GravityCompat.START);
+
+		mDrawerToggle = new ActionBarDrawerToggle(this,
+				mDrawerLayout,
+				R.string.navigation_drawer_open,
+				R.string.navigation_drawer_close
+		) {
+			@Override
+			public void onDrawerClosed(View drawerView) {
+				super.onDrawerClosed(drawerView);
+				invalidateOptionsMenu();
+			}
+
+			@Override
+			public void onDrawerOpened(View drawerView) {
+				super.onDrawerOpened(drawerView);
+				invalidateOptionsMenu();
+			}
+		};
+
+		mDrawerLayout.post(new Runnable() {
+			@Override
+			public void run() {
+				mDrawerToggle.syncState();
+			}
+		});
+
+		mDrawerLayout.setDrawerListener(mDrawerToggle);
+	}
+
+	public boolean isDrawerOpen() {
+		return mDrawerLayout != null && mDrawerLayout.isDrawerOpen(Gravity.LEFT);
 	}
 
 	@Override
 	public void onNavigationDrawerItemSelected(int position) {
-		// update the main content by replacing fragments
 		FragmentManager fragmentManager = getFragmentManager();
 		fragmentManager
 				.beginTransaction()
 				.replace(R.id.container,
 						PlaceholderFragment.newInstance(position + 1)).commit();
+		try {
+			mDrawerLayout.closeDrawer(Gravity.LEFT);
+		} catch (NullPointerException e) {
+
+		}
 	}
 
 	public void onSectionAttached(int number) {
@@ -72,19 +113,13 @@ public class MainActivity extends Activity implements
 	}
 
 	public void restoreActionBar() {
-		ActionBar actionBar = getActionBar();
-		actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_STANDARD);
-		actionBar.setDisplayShowTitleEnabled(true);
-		actionBar.setTitle(mTitle);
+		mActionBar.setTitle(mTitle);
 	}
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		if (!mNavigationDrawerFragment.isDrawerOpen()) {
-			// Only show items in the action bar relevant to this screen
-			// if the drawer is not showing. Otherwise, let the drawer
-			// decide what to show in the action bar.
-			getMenuInflater().inflate(R.menu.main, menu);
+		getMenuInflater().inflate(R.menu.main, menu);
+		if (!isDrawerOpen()) {
 			restoreActionBar();
 			return true;
 		}
@@ -92,30 +127,37 @@ public class MainActivity extends Activity implements
 	}
 
 	@Override
+	protected void onPostCreate(Bundle savedInstanceState) {
+		super.onPostCreate(savedInstanceState);
+
+		// Sync the toggle state after onRestoreInstanceState has occurred.
+		mDrawerToggle.syncState();
+	}
+
+	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		// Handle action bar item clicks here. The action bar will
-		// automatically handle clicks on the Home/Up button, so long
-		// as you specify a parent activity in AndroidManifest.xml.
+		if (mDrawerToggle.onOptionsItemSelected(item)) {
+			return true;
+		}
+
 		int id = item.getItemId();
 		if (id == R.id.action_settings) {
 			return true;
 		}
+
 		return super.onOptionsItemSelected(item);
 	}
 
-	/**
-	 * A placeholder fragment containing a simple view.
-	 */
+	@Override
+	public void onConfigurationChanged(Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		mDrawerToggle.onConfigurationChanged(newConfig);
+	}
+
 	public static class PlaceholderFragment extends Fragment {
-		/**
-		 * The fragment argument representing the section number for this
-		 * fragment.
-		 */
+
 		private static final String ARG_SECTION_NUMBER = "section_number";
 
-		/**
-		 * Returns a new instance of this fragment for the given section number.
-		 */
 		public static PlaceholderFragment newInstance(int sectionNumber) {
 			PlaceholderFragment fragment = new PlaceholderFragment();
 			Bundle args = new Bundle();
@@ -140,6 +182,58 @@ public class MainActivity extends Activity implements
 			super.onAttach(activity);
 			((MainActivity) activity).onSectionAttached(getArguments().getInt(
 					ARG_SECTION_NUMBER));
+		}
+	}
+
+	private class MyDrawerListener implements DrawerLayout.DrawerListener {
+		@Override
+		public void onDrawerOpened(View drawerView) {
+			mDrawerToggle.onDrawerOpened(drawerView);
+			mActionBar.onDrawerOpened();
+		}
+
+		@Override
+		public void onDrawerClosed(View drawerView) {
+			mDrawerToggle.onDrawerClosed(drawerView);
+			mActionBar.onDrawerClosed();
+		}
+
+		@Override
+		public void onDrawerSlide(View drawerView, float slideOffset) {
+			mDrawerToggle.onDrawerSlide(drawerView, slideOffset);
+		}
+
+		@Override
+		public void onDrawerStateChanged(int newState) {
+			mDrawerToggle.onDrawerStateChanged(newState);
+		}
+	}
+
+	private class ActionBarHelper {
+		private final ActionBar mActionBar;
+		private CharSequence mDrawerTitle;
+		private CharSequence mTitle;
+
+		ActionBarHelper() {
+			mActionBar = getSupportActionBar();
+		}
+
+		public void init() {
+			mActionBar.setDisplayHomeAsUpEnabled(true);
+			mActionBar.setDisplayShowHomeEnabled(false);
+			mTitle = mDrawerTitle = getTitle();
+		}
+
+		public void onDrawerClosed() {
+			mActionBar.setTitle(mTitle);
+		}
+
+		public void onDrawerOpened() {
+			mActionBar.setTitle(mDrawerTitle);
+		}
+
+		public void setTitle(CharSequence title) {
+			mTitle = title;
 		}
 	}
 
